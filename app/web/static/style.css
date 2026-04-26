@@ -15,18 +15,52 @@ body {
 
 .shell {
   display: grid;
-  grid-template-columns: minmax(420px, 1.4fr) minmax(360px, 0.8fr);
-  gap: 16px;
-  padding: 16px;
+  gap: 12px;
+  padding: 12px;
 }
 
+.app-header,
 .preview-panel,
-.status-panel,
+.recent-panel,
+.status-strip,
+.config-panel,
 .videos-panel {
   background: #fff;
   border: 1px solid #d8dee8;
   border-radius: 8px;
-  padding: 14px;
+  padding: 12px;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+h1,
+h2 {
+  margin: 0;
+}
+
+h1 {
+  font-size: 22px;
+}
+
+h2 {
+  font-size: 18px;
+}
+
+.workbench {
+  display: grid;
+  grid-template-columns: minmax(520px, 1.65fr) minmax(360px, 0.75fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.preview-panel,
+.recent-panel {
+  min-height: 0;
 }
 
 .preview-wrap {
@@ -53,20 +87,29 @@ body {
   box-shadow: 0 0 0 999px rgb(0 0 0 / 12%);
 }
 
-.topbar {
+.panel-head {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
 }
 
-h1 {
-  margin: 0;
-  font-size: 22px;
+.recent-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.recent-scroll {
+  max-height: min(62vh, 610px);
+  overflow: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
 }
 
 .state {
-  padding: 6px 10px;
+  flex: 0 0 auto;
+  padding: 7px 12px;
   border-radius: 6px;
   font-weight: 700;
   background: #e5e7eb;
@@ -88,16 +131,15 @@ h1 {
 
 .metrics {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin: 16px 0;
+  grid-template-columns: repeat(9, minmax(110px, 1fr));
+  gap: 8px;
 }
 
 .metrics div {
   border: 1px solid #e5e7eb;
   border-radius: 6px;
-  padding: 10px;
-  min-height: 62px;
+  min-height: 58px;
+  padding: 9px;
 }
 
 .metrics span {
@@ -114,49 +156,46 @@ h1 {
 
 .warning {
   min-height: 22px;
+  margin: 10px 0 0;
   color: #b91c1c;
   font-weight: 700;
 }
 
+.action-row {
+  display: grid;
+  grid-template-columns: minmax(180px, max-content) minmax(260px, 1fr);
+  gap: 10px;
+  margin-top: 10px;
+}
+
 button,
 input,
-select {
+select,
+.button-link {
   border: 1px solid #cbd5e1;
   border-radius: 6px;
   padding: 9px 10px;
   font: inherit;
 }
 
-button {
+button,
+.button-link {
   cursor: pointer;
   background: #f8fafc;
 }
 
+.button-link {
+  color: #0f172a;
+  text-decoration: none;
+  text-align: center;
+  white-space: nowrap;
+}
+
 .danger {
-  width: 100%;
-  margin-top: 10px;
   color: #fff;
   border-color: #b91c1c;
   background: #b91c1c;
   font-weight: 700;
-}
-
-.videos-panel {
-  grid-column: 1 / -1;
-}
-
-.filters {
-  display: grid;
-  grid-template-columns: 1fr 160px 150px 150px 90px;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.config-panel {
-  margin-bottom: 14px;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  padding: 10px;
 }
 
 .config-panel summary {
@@ -166,7 +205,7 @@ button {
 
 .config-form {
   display: grid;
-  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  grid-template-columns: repeat(6, minmax(120px, 1fr));
   gap: 10px;
   margin-top: 12px;
   align-items: end;
@@ -201,8 +240,21 @@ button {
   font-weight: 700;
 }
 
+.filters {
+  display: grid;
+  grid-template-columns: 1fr 160px 150px 150px 90px;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
 .table-wrap {
-  overflow-x: auto;
+  overflow: auto;
+}
+
+.full-table-wrap {
+  max-height: calc(100vh - 150px);
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
 }
 
 table {
@@ -216,11 +268,30 @@ td {
   text-align: left;
   border-bottom: 1px solid #e5e7eb;
   padding: 9px 8px;
+  vertical-align: middle;
 }
 
 th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   color: #475569;
   background: #f8fafc;
+}
+
+.recent-table th,
+.recent-table td {
+  padding: 8px;
+}
+
+.recent-table th:nth-child(1),
+.recent-table td:nth-child(1) {
+  width: 76px;
+}
+
+.recent-table td:nth-child(2) {
+  max-width: 180px;
+  overflow-wrap: anywhere;
 }
 
 .error-cell {
@@ -231,10 +302,29 @@ th {
   white-space: nowrap;
 }
 
+@media (max-width: 1200px) {
+  .metrics {
+    grid-template-columns: repeat(5, minmax(120px, 1fr));
+  }
+
+  .config-form {
+    grid-template-columns: repeat(3, minmax(120px, 1fr));
+  }
+}
+
 @media (max-width: 900px) {
-  .shell,
+  .workbench,
   .filters,
+  .action-row,
   .config-form {
     grid-template-columns: 1fr;
+  }
+
+  .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .recent-scroll {
+    max-height: 360px;
   }
 }

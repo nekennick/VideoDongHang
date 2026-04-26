@@ -1,9 +1,14 @@
 const $ = (id) => document.getElementById(id);
-let lastVideoItems = new Map();
-let currentConfig = null;
 
 function fmtDuration(value) {
   return `${Number(value || 0).toFixed(1)}s`;
+}
+
+function fmtTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
 function escapeHtml(value) {
@@ -35,19 +40,31 @@ async function refreshStatus() {
   $("camera").textContent = status.camera_connected ? "connected" : "disconnected";
   const warnings = [];
   if (status.camera_error) warnings.push(status.camera_error);
-  if (!status.ffmpeg_available) {
-    warnings.push(`FFmpeg chưa sẵn sàng: ${status.ffmpeg_path}`);
-  }
+  if (!status.ffmpeg_available) warnings.push(`FFmpeg chưa sẵn sàng: ${status.ffmpeg_path}`);
   if (status.disk_space_low) {
     warnings.push(`Ổ đĩa sắp đầy: còn ${status.disk_free_gb} GB, ngưỡng tối thiểu ${status.min_free_disk_gb} GB`);
   }
   $("warning").textContent = warnings.join(" | ");
 }
 
+async function refreshRecentVideos() {
+  const res = await fetch("/api/videos?limit=50");
+  const data = await res.json();
+  $("recentVideos").innerHTML = data.items
+    .map((item) => {
+      return `<tr>
+        <td>${escapeHtml(fmtTime(item.start_time))}</td>
+        <td>${escapeHtml(item.order_code)}</td>
+        <td>${escapeHtml(item.status)}</td>
+        <td>${item.duration_seconds ? Number(item.duration_seconds).toFixed(1) : ""}</td>
+      </tr>`;
+    })
+    .join("");
+}
+
 async function loadConfig() {
   const res = await fetch("/api/config");
   const config = await res.json();
-  currentConfig = config;
   fillConfigForm(config);
   const roiBox = document.querySelector(".roi-box");
   const roi = config.qr?.roi;
@@ -139,91 +156,15 @@ function removeEmptyValues(value) {
   return value;
 }
 
-function queryFromForm() {
-  const params = new URLSearchParams();
-  const data = new FormData($("filters"));
-  for (const [key, value] of data.entries()) {
-    if (value) params.set(key, value);
-  }
-  params.set("limit", "50");
-  return params.toString();
-}
-
-async function refreshVideos() {
-  const res = await fetch(`/api/videos?${queryFromForm()}`);
-  const data = await res.json();
-  lastVideoItems = new Map(data.items.map((item) => [String(item.id), item]));
-  $("videos").innerHTML = data.items
-    .map((item) => {
-      const size = item.compressed_size_mb || item.raw_size_mb || "";
-      const view = item.status === "done" ? `<a href="/video/${item.id}" target="_blank">Xem</a>` : "";
-      const folder = item.video_path || item.raw_path ? `<button type="button" data-open-folder="${item.id}">Mở</button>` : "";
-      const copy = item.video_path || item.raw_path ? `<button type="button" data-copy-path="${item.id}">Copy</button>` : "";
-      const retry = item.status === "failed" && item.raw_path ? `<button type="button" data-retry="${item.id}">Nén lại</button>` : "";
-      const error = item.error_message ? String(item.error_message).slice(0, 140) : "";
-      return `<tr>
-        <td>${escapeHtml(item.start_time)}</td>
-        <td>${escapeHtml(item.order_code)}</td>
-        <td>${escapeHtml(item.platform)}</td>
-        <td>${escapeHtml(item.status)}</td>
-        <td>${item.duration_seconds ? Number(item.duration_seconds).toFixed(1) : ""}</td>
-        <td>${escapeHtml(size)}</td>
-        <td class="error-cell" title="${escapeHtml(item.error_message)}">${escapeHtml(error)}</td>
-        <td>${view}</td>
-        <td>${retry}</td>
-        <td>${folder}</td>
-        <td>${copy}</td>
-      </tr>`;
-    })
-    .join("");
-}
-
-$("filters").addEventListener("submit", (event) => {
-  event.preventDefault();
-  refreshVideos();
-});
-
 $("emergency").addEventListener("click", async () => {
   if (!confirm("Xác nhận dừng khẩn cấp / kết thúc ca?")) return;
   await fetch("/api/admin/emergency-stop", { method: "POST" });
   await refreshStatus();
-  await refreshVideos();
+  await refreshRecentVideos();
 });
 
 $("openVideosFolder").addEventListener("click", async () => {
   await fetch("/api/admin/open-videos-folder", { method: "POST" });
-});
-
-$("videos").addEventListener("click", async (event) => {
-  const openButton = event.target.closest("[data-open-folder]");
-  if (openButton) {
-    await fetch(`/api/admin/open-video-folder/${openButton.dataset.openFolder}`, { method: "POST" });
-    return;
-  }
-  const copyButton = event.target.closest("[data-copy-path]");
-  if (copyButton) {
-    const item = lastVideoItems.get(copyButton.dataset.copyPath);
-    const path = item?.video_path || item?.raw_path || "";
-    if (!path) return;
-    await navigator.clipboard.writeText(path);
-    copyButton.textContent = "Đã copy";
-    setTimeout(() => {
-      copyButton.textContent = "Copy";
-    }, 1200);
-    return;
-  }
-  const retryButton = event.target.closest("[data-retry]");
-  if (!retryButton) return;
-  retryButton.disabled = true;
-  retryButton.textContent = "Đã gửi";
-  const res = await fetch(`/api/admin/retry-compression/${retryButton.dataset.retry}`, { method: "POST" });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    retryButton.textContent = data.detail || "Lỗi";
-    retryButton.disabled = false;
-    return;
-  }
-  await refreshVideos();
 });
 
 $("configForm").addEventListener("submit", async (event) => {
@@ -242,14 +183,13 @@ $("configForm").addEventListener("submit", async (event) => {
     return;
   }
   const data = await res.json();
-  currentConfig = data.config;
-  fillConfigForm(currentConfig);
+  fillConfigForm(data.config);
   await loadConfig();
   message.textContent = data.restart_required ? "Đã lưu. Khởi động lại app để áp dụng camera/storage." : "Đã lưu";
 });
 
 loadConfig();
 refreshStatus();
-refreshVideos();
+refreshRecentVideos();
 setInterval(refreshStatus, 1000);
-setInterval(refreshVideos, 5000);
+setInterval(refreshRecentVideos, 5000);

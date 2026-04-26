@@ -17,9 +17,12 @@ def build_web_router() -> APIRouter:
     def index():
         return FileResponse(STATIC_DIR / "index.html")
 
+    @router.get("/videos")
+    def videos():
+        return FileResponse(STATIC_DIR / "videos.html")
+
     return router
 
 
 def mount_static(app) -> None:
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-
