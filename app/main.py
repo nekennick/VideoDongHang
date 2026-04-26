@@ -29,7 +29,7 @@ qr_detector = QRDetector(CONFIG)
 camera_service = CameraService(CONFIG, frame_buffer, qr_detector, session_manager)
 ffmpeg_worker = FFmpegWorker(CONFIG, repo, compression_queue)
 
-app = FastAPI(title="Packing Video System")
+app = FastAPI(title="Quay Video Đóng Hàng Tự Dộng by Khoata")
 mount_static(app)
 app.include_router(build_web_router())
 app.include_router(build_api_router(repo, session_manager, camera_service, compression_queue))

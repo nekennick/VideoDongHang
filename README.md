@@ -1,4 +1,4 @@
-# Packing Video System
+# Quay Video Đóng Hàng Tự Dộng by Khoata
 
 Web local tren Windows de quay video dong hang bang camera iVCAM, tu dong cat video theo QR don hang va nen video bang FFmpeg.
 
