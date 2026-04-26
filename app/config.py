@@ -13,7 +13,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "end_shift_debounce_seconds": 1.0,
         "order_qr_process_immediately": True,
         "switch_order_cooldown_seconds": 0.3,
-        "roi_enabled": True,
+        "roi_enabled": False,
         "roi": {"x": 0.05, "y": 0.05, "w": 0.35, "h": 0.35},
     },
     "video": {"raw_codec": "mp4v", "raw_extension": ".mp4", "compressed_extension": ".mp4", "include_audio": False},

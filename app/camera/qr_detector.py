@@ -18,27 +18,46 @@ class QRDetector:
     def detect(self, frame) -> list[dict]:
         if self.detector is None:
             return []
-        target = self._roi_frame(frame)
-        values: list[str] = []
+        target = frame
         try:
-            ok, decoded_info, _points, _ = self.detector.detectAndDecodeMulti(target)
+            ok, decoded_info, points, _ = self.detector.detectAndDecodeMulti(target)
             if ok:
-                values = [value for value in decoded_info if value]
+                detections: list[dict] = []
+                for index, value in enumerate(decoded_info):
+                    if not value:
+                        continue
+                    qr = classify_qr(value)
+                    qr["qr_box"] = self._box_from_points(points[index], frame)
+                    detections.append(qr)
+                return detections
         except Exception:
-            value, _points, _ = self.detector.detectAndDecode(target)
+            value, points, _ = self.detector.detectAndDecode(target)
             if value:
-                values = [value]
-        return [classify_qr(value) for value in values]
+                qr = classify_qr(value)
+                qr["qr_box"] = self._box_from_points(points, frame)
+                return [qr]
+        return []
 
-    def _roi_frame(self, frame):
-        qr_config = self.config["qr"]
-        if not qr_config.get("roi_enabled", False):
-            return frame
+    def _box_from_points(self, points, frame) -> dict | None:
+        if points is None:
+            return None
         height, width = frame.shape[:2]
-        roi = qr_config["roi"]
-        x = int(width * roi["x"])
-        y = int(height * roi["y"])
-        w = int(width * roi["w"])
-        h = int(height * roi["h"])
-        return frame[max(0, y) : min(height, y + h), max(0, x) : min(width, x + w)]
-
+        point_list = points.tolist() if hasattr(points, "tolist") else points
+        if not point_list:
+            return None
+        if point_list and isinstance(point_list[0][0], list):
+            point_list = point_list[0]
+        if not point_list:
+            return None
+        xs = [float(point[0]) for point in point_list]
+        ys = [float(point[1]) for point in point_list]
+        left = max(0.0, min(xs) / width)
+        top = max(0.0, min(ys) / height)
+        right = min(1.0, max(xs) / width)
+        bottom = min(1.0, max(ys) / height)
+        return {
+            "x": round(left, 4),
+            "y": round(top, 4),
+            "w": round(max(0.0, right - left), 4),
+            "h": round(max(0.0, bottom - top), 4),
+        }

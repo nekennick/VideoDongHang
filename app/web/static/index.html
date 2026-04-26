@@ -1,86 +1,87 @@
 <!doctype html>
 <html lang="vi">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Quay Video Đóng Hàng Tự Dộng by Khoata</title>
-    <link rel="stylesheet" href="/static/style.css" />
-  </head>
-  <body>
-    <main class="shell">
-      <header class="app-header">
-        <h1>Quay Video Đóng Hàng Tự Dộng by Khoata</h1>
-        <span id="state" class="state">IDLE</span>
-      </header>
 
-      <section class="workbench">
-        <section class="preview-panel">
-          <div class="preview-wrap">
-            <img id="preview" src="/api/preview.mjpg" alt="Live camera preview" />
-            <div class="roi-box" aria-hidden="true"></div>
-          </div>
-        </section>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Quay Video Đóng Hàng Tự Dộng by Khoata</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
 
-        <aside class="recent-panel">
-          <div class="panel-head">
-            <h2>Video xử lý</h2>
+<body>
+  <main class="shell">
+    <header class="app-header">
+      <h1>Quay Video Đóng Hàng Tự Dộng by Khoata</h1>
+        <span id="state" class="state">Sẵn sàng</span>
+    </header>
+
+    <section class="workbench">
+      <section class="preview-panel">
+        <div class="preview-wrap">
+          <img id="preview" src="/api/preview.mjpg" alt="Live camera preview" />
+          <div id="qrDetections" class="detection-layer" aria-hidden="true"></div>
+        </div>
+      </section>
+
+      <aside class="recent-panel">
+        <div class="panel-head">
+          <h2>Video xử lý</h2>
+          <div class="panel-actions">
+            <button id="clearRecentList" type="button" hidden>Xóa danh sách</button>
             <a class="button-link" href="/videos" target="_blank" rel="noopener">Danh Sách Video</a>
           </div>
-          <div class="recent-scroll">
-            <table class="recent-table">
-              <thead>
-                <tr>
-                  <th>Thời gian</th>
-                  <th>Mã đơn</th>
-                  <th>Trạng thái</th>
-                  <th>Thời lượng</th>
-                </tr>
-              </thead>
-              <tbody id="recentVideos"></tbody>
-            </table>
-          </div>
-        </aside>
-      </section>
-
-      <section class="status-strip">
-        <div class="metrics">
-          <div><span>Mã đang quay</span><strong id="order">-</strong></div>
-          <div><span>Nền tảng</span><strong id="platform">unknown</strong></div>
-          <div><span>Thời lượng</span><strong id="duration">0.0s</strong></div>
-          <div><span>Queue nén</span><strong id="queue">0</strong></div>
-          <div><span>Xong hôm nay</span><strong id="done">0</strong></div>
-          <div><span>Lỗi hôm nay</span><strong id="failed">0</strong></div>
-          <div><span>Ổ trống</span><strong id="disk">0 GB</strong></div>
-          <div><span>QR gần nhất</span><strong id="lastQr">-</strong></div>
-          <div><span>Camera</span><strong id="camera">checking</strong></div>
         </div>
-        <p id="warning" class="warning"></p>
-        <div class="action-row">
-          <button id="openVideosFolder" type="button">Mở thư mục video</button>
-          <button id="emergency" class="danger" type="button">Dừng khẩn cấp / Kết thúc ca</button>
+        <div class="recent-scroll">
+          <table class="recent-table">
+            <thead>
+              <tr>
+                <th>Thời gian</th>
+                <th>Mã đơn</th>
+                <th>Trạng thái</th>
+                <th>Thời lượng</th>
+              </tr>
+            </thead>
+            <tbody id="recentVideos"></tbody>
+          </table>
         </div>
-      </section>
+      </aside>
+    </section>
 
-      <details class="config-panel">
-        <summary>Cấu hình nhanh</summary>
-        <form id="configForm" class="config-form">
-          <label>Camera <input name="camera.index" type="number" min="0" step="1" /></label>
-          <label>Rộng <input name="camera.width" type="number" min="1" step="1" /></label>
-          <label>Cao <input name="camera.height" type="number" min="1" step="1" /></label>
-          <label>FPS <input name="camera.fps" type="number" min="1" step="1" /></label>
-          <label>CRF <input name="ffmpeg.crf" type="number" min="0" max="51" step="1" /></label>
-          <label>Preset <input name="ffmpeg.preset" /></label>
-          <label>Ổ trống tối thiểu (GB) <input name="storage.min_free_disk_gb" type="number" min="0" step="1" /></label>
-          <label class="check"><input name="qr.roi_enabled" type="checkbox" /> ROI QR</label>
-          <label>ROI X <input name="qr.roi.x" type="number" min="0" max="1" step="0.01" /></label>
-          <label>ROI Y <input name="qr.roi.y" type="number" min="0" max="1" step="0.01" /></label>
-          <label>ROI W <input name="qr.roi.w" type="number" min="0" max="1" step="0.01" /></label>
-          <label>ROI H <input name="qr.roi.h" type="number" min="0" max="1" step="0.01" /></label>
-          <button type="submit">Lưu cấu hình</button>
-          <span id="configMessage"></span>
-        </form>
-      </details>
-    </main>
-    <script src="/static/app.js"></script>
-  </body>
+    <section class="status-strip">
+      <div class="metrics">
+        <div><span>Mã đang quay</span><strong id="order">-</strong></div>
+        <div><span>Nền tảng</span><strong id="platform">unknown</strong></div>
+        <div><span>Thời lượng</span><strong id="duration">0.0s</strong></div>
+        <div><span>Queue nén</span><strong id="queue">0</strong></div>
+        <div><span>Xong hôm nay</span><strong id="done">0</strong></div>
+        <div><span>Lỗi hôm nay</span><strong id="failed">0</strong></div>
+        <div><span>Ổ trống</span><strong id="disk">0 GB</strong></div>
+        <div><span>QR gần nhất</span><strong id="lastQr">-</strong></div>
+        <div><span>Camera</span><strong id="camera">checking</strong></div>
+      </div>
+      <p id="warning" class="warning"></p>
+      <div class="action-row">
+        <button id="openVideosFolder" type="button">Mở thư mục video</button>
+        <button id="emergency" class="danger" type="button">Dừng ngay</button>
+      </div>
+    </section>
+
+    <details class="config-panel">
+      <summary>Cấu hình nhanh</summary>
+      <form id="configForm" class="config-form">
+        <label>Camera <input name="camera.index" type="number" min="0" step="1" /></label>
+        <label>Rộng <input name="camera.width" type="number" min="1" step="1" /></label>
+        <label>Cao <input name="camera.height" type="number" min="1" step="1" /></label>
+        <label>FPS <input name="camera.fps" type="number" min="1" step="1" /></label>
+        <label>CRF <input name="ffmpeg.crf" type="number" min="0" max="51" step="1" /></label>
+        <label>Preset <input name="ffmpeg.preset" /></label>
+        <label>Ổ trống tối thiểu (GB) <input name="storage.min_free_disk_gb" type="number" min="0" step="1" /></label>
+        <button type="submit">Lưu cấu hình</button>
+        <span id="configMessage"></span>
+      </form>
+    </details>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+
 </html>

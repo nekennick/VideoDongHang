@@ -37,6 +37,7 @@ class SessionManager:
         self.camera_connected = False
         self.camera_error: str | None = None
         self.disk_warning_active = False
+        self.qr_detections: list[dict] = []
 
     def write_frame(self, frame) -> None:
         with self.lock:
@@ -61,6 +62,10 @@ class SessionManager:
     def reset_end_shift_debounce(self) -> None:
         with self.lock:
             self._end_shift_seen_since = None
+
+    def set_qr_detections(self, detections: list[dict]) -> None:
+        with self.lock:
+            self.qr_detections = detections
 
     def set_error(self, message: str, exc: Exception | None = None) -> None:
         with self.lock:
@@ -206,4 +211,5 @@ class SessionManager:
                 "camera_connected": self.camera_connected,
                 "camera_error": self.camera_error,
                 "last_qr_content": self.last_qr_content,
+                "qr_detections": list(self.qr_detections),
             }

@@ -1,6 +1,18 @@
 const $ = (id) => document.getElementById(id);
 let lastVideoItems = new Map();
 
+const VIDEO_STATUS_LABELS = {
+  recording: "Đang quay",
+  queued: "Chờ nén",
+  compressing: "Đang nén",
+  done: "Hoàn tất",
+  failed: "Lỗi",
+};
+
+function videoStatusLabel(value) {
+  return VIDEO_STATUS_LABELS[value] || value || "-";
+}
+
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => {
     const entities = {
@@ -40,7 +52,7 @@ async function refreshVideos() {
         <td>${escapeHtml(item.start_time)}</td>
         <td>${escapeHtml(item.order_code)}</td>
         <td>${escapeHtml(item.platform)}</td>
-        <td>${escapeHtml(item.status)}</td>
+        <td>${escapeHtml(videoStatusLabel(item.status))}</td>
         <td>${item.duration_seconds ? Number(item.duration_seconds).toFixed(1) : ""}</td>
         <td>${escapeHtml(size)}</td>
         <td class="error-cell" title="${escapeHtml(item.error_message)}">${escapeHtml(error)}</td>

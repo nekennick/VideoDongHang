@@ -88,6 +88,7 @@ class CameraService:
                 self.buffer.set(frame)
                 self.session_manager.write_frame(frame)
                 valid_qrs = [qr for qr in self.qr_detector.detect(frame) if qr.get("type") != "invalid"]
+                self.session_manager.set_qr_detections([qr["qr_box"] for qr in valid_qrs if qr.get("qr_box")])
                 has_end_shift = False
                 for qr in valid_qrs:
                     if qr.get("type") == "end_shift":

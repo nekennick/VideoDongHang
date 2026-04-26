@@ -1,4 +1,28 @@
 const $ = (id) => document.getElementById(id);
+const RECENT_CLEAR_KEY = "packingVideo.recentHiddenBefore";
+
+const SYSTEM_STATE_LABELS = {
+  IDLE: "Sẵn sàng",
+  RECORDING: "Đang quay",
+  SHIFT_ENDED: "Đã dừng quay",
+  ERROR: "Lỗi",
+};
+
+const VIDEO_STATUS_LABELS = {
+  recording: "Đang quay",
+  queued: "Chờ nén",
+  compressing: "Đang nén",
+  done: "Hoàn tất",
+  failed: "Lỗi",
+};
+
+function systemStateLabel(value) {
+  return SYSTEM_STATE_LABELS[value] || value || "-";
+}
+
+function videoStatusLabel(value) {
+  return VIDEO_STATUS_LABELS[value] || value || "-";
+}
 
 function fmtDuration(value) {
   return `${Number(value || 0).toFixed(1)}s`;
@@ -24,10 +48,44 @@ function escapeHtml(value) {
   });
 }
 
+function imageContentRect() {
+  const wrap = document.querySelector(".preview-wrap");
+  const image = $("preview");
+  const wrapRect = wrap.getBoundingClientRect();
+  const naturalWidth = image.naturalWidth || 16;
+  const naturalHeight = image.naturalHeight || 9;
+  const imageRatio = naturalWidth / naturalHeight;
+  const wrapRatio = wrapRect.width / wrapRect.height;
+  if (wrapRatio > imageRatio) {
+    const height = wrapRect.height;
+    const width = height * imageRatio;
+    return { left: (wrapRect.width - width) / 2, top: 0, width, height };
+  }
+  const width = wrapRect.width;
+  const height = width / imageRatio;
+  return { left: 0, top: (wrapRect.height - height) / 2, width, height };
+}
+
+function renderQrDetections(detections) {
+  const layer = $("qrDetections");
+  const rect = imageContentRect();
+  layer.style.left = `${rect.left}px`;
+  layer.style.top = `${rect.top}px`;
+  layer.style.width = `${rect.width}px`;
+  layer.style.height = `${rect.height}px`;
+  layer.innerHTML = (detections || [])
+    .map((box) => {
+      return `<div class="qr-detection-box" style="left:${box.x * 100}%;top:${box.y * 100}%;width:${box.w * 100}%;height:${box.h * 100}%;">
+        <span>QR</span>
+      </div>`;
+    })
+    .join("");
+}
+
 async function refreshStatus() {
   const res = await fetch("/api/status");
   const status = await res.json();
-  $("state").textContent = status.state;
+  $("state").textContent = systemStateLabel(status.state);
   $("state").className = `state state-${String(status.state).toLowerCase()}`;
   $("order").textContent = status.current_order_code || "-";
   $("platform").textContent = status.current_platform || "unknown";
@@ -37,7 +95,7 @@ async function refreshStatus() {
   $("failed").textContent = status.failed_today;
   $("disk").textContent = `${status.disk_free_gb} GB`;
   $("lastQr").textContent = status.last_qr_content || "-";
-  $("camera").textContent = status.camera_connected ? "connected" : "disconnected";
+  $("camera").textContent = status.camera_connected ? "Đã kết nối" : "Mất kết nối";
   const warnings = [];
   if (status.camera_error) warnings.push(status.camera_error);
   if (!status.ffmpeg_available) warnings.push(`FFmpeg chưa sẵn sàng: ${status.ffmpeg_path}`);
@@ -45,17 +103,26 @@ async function refreshStatus() {
     warnings.push(`Ổ đĩa sắp đầy: còn ${status.disk_free_gb} GB, ngưỡng tối thiểu ${status.min_free_disk_gb} GB`);
   }
   $("warning").textContent = warnings.join(" | ");
+  $("clearRecentList").hidden = status.state !== "SHIFT_ENDED";
+  renderQrDetections(status.qr_detections);
 }
 
 async function refreshRecentVideos() {
   const res = await fetch("/api/videos?limit=50");
   const data = await res.json();
-  $("recentVideos").innerHTML = data.items
+  const hiddenBefore = localStorage.getItem(RECENT_CLEAR_KEY);
+  const visibleItems = hiddenBefore
+    ? data.items.filter((item) => {
+        if (!item.start_time) return true;
+        return new Date(item.start_time).getTime() > new Date(hiddenBefore).getTime();
+      })
+    : data.items;
+  $("recentVideos").innerHTML = visibleItems
     .map((item) => {
       return `<tr>
         <td>${escapeHtml(fmtTime(item.start_time))}</td>
         <td>${escapeHtml(item.order_code)}</td>
-        <td>${escapeHtml(item.status)}</td>
+        <td>${escapeHtml(videoStatusLabel(item.status))}</td>
         <td>${item.duration_seconds ? Number(item.duration_seconds).toFixed(1) : ""}</td>
       </tr>`;
     })
@@ -66,17 +133,6 @@ async function loadConfig() {
   const res = await fetch("/api/config");
   const config = await res.json();
   fillConfigForm(config);
-  const roiBox = document.querySelector(".roi-box");
-  const roi = config.qr?.roi;
-  if (!config.qr?.roi_enabled || !roi) {
-    roiBox.hidden = true;
-    return;
-  }
-  roiBox.hidden = false;
-  roiBox.style.left = `${Number(roi.x || 0) * 100}%`;
-  roiBox.style.top = `${Number(roi.y || 0) * 100}%`;
-  roiBox.style.width = `${Number(roi.w || 0) * 100}%`;
-  roiBox.style.height = `${Number(roi.h || 0) * 100}%`;
 }
 
 function setField(name, value) {
@@ -97,11 +153,6 @@ function fillConfigForm(config) {
   setField("ffmpeg.crf", config.ffmpeg?.crf);
   setField("ffmpeg.preset", config.ffmpeg?.preset);
   setField("storage.min_free_disk_gb", config.storage?.min_free_disk_gb);
-  setField("qr.roi_enabled", config.qr?.roi_enabled);
-  setField("qr.roi.x", config.qr?.roi?.x);
-  setField("qr.roi.y", config.qr?.roi?.y);
-  setField("qr.roi.w", config.qr?.roi?.w);
-  setField("qr.roi.h", config.qr?.roi?.h);
 }
 
 function readNumber(name) {
@@ -129,15 +180,6 @@ function buildConfigPayload() {
     storage: {
       min_free_disk_gb: readNumber("storage.min_free_disk_gb"),
     },
-    qr: {
-      roi_enabled: document.querySelector('[name="qr.roi_enabled"]').checked,
-      roi: {
-        x: readNumber("qr.roi.x"),
-        y: readNumber("qr.roi.y"),
-        w: readNumber("qr.roi.w"),
-        h: readNumber("qr.roi.h"),
-      },
-    },
   };
 }
 
@@ -157,7 +199,7 @@ function removeEmptyValues(value) {
 }
 
 $("emergency").addEventListener("click", async () => {
-  if (!confirm("Xác nhận dừng khẩn cấp / kết thúc ca?")) return;
+  if (!confirm("Xác nhận dừng quay?")) return;
   await fetch("/api/admin/emergency-stop", { method: "POST" });
   await refreshStatus();
   await refreshRecentVideos();
@@ -165,6 +207,11 @@ $("emergency").addEventListener("click", async () => {
 
 $("openVideosFolder").addEventListener("click", async () => {
   await fetch("/api/admin/open-videos-folder", { method: "POST" });
+});
+
+$("clearRecentList").addEventListener("click", () => {
+  localStorage.setItem(RECENT_CLEAR_KEY, new Date().toISOString());
+  refreshRecentVideos();
 });
 
 $("configForm").addEventListener("submit", async (event) => {
@@ -191,5 +238,6 @@ $("configForm").addEventListener("submit", async (event) => {
 loadConfig();
 refreshStatus();
 refreshRecentVideos();
-setInterval(refreshStatus, 1000);
+setInterval(refreshStatus, 500);
 setInterval(refreshRecentVideos, 5000);
+window.addEventListener("resize", refreshStatus);

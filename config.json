@@ -11,7 +11,7 @@
     "end_shift_debounce_seconds": 1.0,
     "order_qr_process_immediately": true,
     "switch_order_cooldown_seconds": 0.3,
-    "roi_enabled": true,
+    "roi_enabled": false,
     "roi": {
       "x": 0.05,
       "y": 0.05,
