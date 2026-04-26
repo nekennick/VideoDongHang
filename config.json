@@ -1,0 +1,46 @@
+{
+  "camera": {
+    "index": 0,
+    "width": 1280,
+    "height": 720,
+    "fps": 20,
+    "backend": "auto"
+  },
+  "qr": {
+    "end_shift_command": "CMD:END_SHIFT",
+    "end_shift_debounce_seconds": 1.0,
+    "order_qr_process_immediately": true,
+    "switch_order_cooldown_seconds": 0.3,
+    "roi_enabled": true,
+    "roi": {
+      "x": 0.05,
+      "y": 0.05,
+      "w": 0.35,
+      "h": 0.35
+    }
+  },
+  "video": {
+    "raw_codec": "mp4v",
+    "raw_extension": ".mp4",
+    "compressed_extension": ".mp4",
+    "include_audio": false
+  },
+  "ffmpeg": {
+    "path": "ffmpeg",
+    "crf": 28,
+    "preset": "veryfast"
+  },
+  "storage": {
+    "base_dir": "data",
+    "raw_dir": "data/raw",
+    "videos_dir": "data/videos",
+    "database_dir": "data/database",
+    "logs_dir": "data/logs",
+    "delete_raw_after_success": true,
+    "min_free_disk_gb": 20
+  },
+  "web": {
+    "host": "127.0.0.1",
+    "port": 8000
+  }
+}

@@ -1,0 +1,14 @@
+.venv/
+.tmp/
+__pycache__/
+*.py[cod]
+
+data/raw/
+data/videos/
+data/logs/
+data/database/*.db
+data/database/*.db-*
+
+.env
+.DS_Store
+Thumbs.db
