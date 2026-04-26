@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+import time
 from unittest.mock import patch
 
 from app.compression.queue import CompressionQueue
@@ -26,6 +27,9 @@ class FakeRepo:
         self.next_id += 1
         self.videos[video_id] = {"id": video_id, "status": "recording", **kwargs}
         return video_id
+
+    def order_code_exists(self, order_code):
+        return any(video["order_code"] == order_code for video in self.videos.values())
 
     def finish_recording(self, video_id, duration_seconds, raw_size_mb):
         self.videos[video_id]["status"] = "queued"
@@ -58,6 +62,14 @@ def test_config():
         "video": {"raw_codec": "mp4v", "raw_extension": ".mp4"},
         "storage": {"raw_dir": "data/raw", "videos_dir": "data/videos"},
     }
+
+
+def wait_for_queue(queue, expected_size, timeout=1.0):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if queue.size() == expected_size:
+            return
+        time.sleep(0.01)
 
 
 class CoreWorkflowTest(unittest.TestCase):
@@ -96,8 +108,22 @@ class CoreWorkflowTest(unittest.TestCase):
         self.assertEqual(self.manager.state, "RECORDING")
         self.assertEqual(self.manager.current_order_code, "ORDER_B")
         self.assertEqual(len(self.repo.videos), 2)
+        wait_for_queue(self.queue, 1)
         self.assertEqual(self.queue.size(), 1)
         self.assertEqual(self.repo.videos[1]["status"], "queued")
+
+    @patch("app.recording.session_manager.VideoWriter", FakeWriter)
+    def test_previous_order_code_is_ignored_without_switching(self):
+        self.manager.handle_order_qr("ORDER_A", "unknown", "ORDER_A")
+        self.manager.handle_order_qr("ORDER_B", "unknown", "ORDER_B")
+        self.manager.handle_order_qr("ORDER_A", "unknown", "ORDER_A")
+
+        self.assertEqual(self.manager.state, "RECORDING")
+        self.assertEqual(self.manager.current_order_code, "ORDER_B")
+        self.assertEqual(len(self.repo.videos), 2)
+        wait_for_queue(self.queue, 1)
+        self.assertEqual(self.queue.size(), 1)
+        self.assertTrue(any(event[0] == "duplicate_order_ignored" for event in self.repo.events))
 
     @patch("app.recording.session_manager.VideoWriter", FakeWriter)
     @patch("app.recording.session_manager.time.monotonic")
@@ -114,6 +140,7 @@ class CoreWorkflowTest(unittest.TestCase):
         self.manager.handle_end_shift_qr()
         self.assertEqual(self.manager.state, "SHIFT_ENDED")
         self.assertIsNone(self.manager.current_order_code)
+        wait_for_queue(self.queue, 1)
         self.assertEqual(self.queue.size(), 1)
 
     @patch("app.recording.session_manager.VideoWriter", FakeWriter)

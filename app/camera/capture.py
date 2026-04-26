@@ -37,6 +37,7 @@ class CameraService:
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, int(camera["width"]))
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, int(camera["height"]))
         cap.set(cv2.CAP_PROP_FPS, int(camera["fps"]))
+        cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         return cap
 
     def _run(self) -> None:
@@ -88,7 +89,17 @@ class CameraService:
                 self.buffer.set(frame)
                 self.session_manager.write_frame(frame)
                 valid_qrs = [qr for qr in self.qr_detector.detect(frame) if qr.get("type") != "invalid"]
-                self.session_manager.set_qr_detections([qr["qr_box"] for qr in valid_qrs if qr.get("qr_box")])
+                self.session_manager.set_qr_detections(
+                    [
+                        {
+                            **qr["qr_box"],
+                            "label": qr.get("order_code") or qr.get("raw_content") or "QR",
+                            "type": qr.get("type"),
+                        }
+                        for qr in valid_qrs
+                        if qr.get("qr_box")
+                    ]
+                )
                 has_end_shift = False
                 for qr in valid_qrs:
                     if qr.get("type") == "end_shift":

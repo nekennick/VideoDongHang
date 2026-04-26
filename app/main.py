@@ -63,5 +63,6 @@ def startup() -> None:
 @app.on_event("shutdown")
 def shutdown() -> None:
     camera_service.stop()
+    session_manager.wait_for_finalizers(timeout=10)
     ffmpeg_worker.stop()
     conn.close()

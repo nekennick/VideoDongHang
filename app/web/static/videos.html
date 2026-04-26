@@ -33,10 +33,16 @@
           </select>
           <button type="submit">Tìm</button>
         </form>
+        <div class="bulk-actions">
+          <span id="selectedCount">Chưa chọn video nào</span>
+          <button id="bulkDelete" class="delete-video-button" type="button" disabled>Xóa video đã chọn</button>
+          <span id="bulkMessage"></span>
+        </div>
         <div class="table-wrap full-table-wrap">
           <table>
             <thead>
               <tr>
+                <th><input id="selectAllVideos" type="checkbox" aria-label="Chọn tất cả video" /></th>
                 <th>Thời gian</th>
                 <th>Mã đơn</th>
                 <th>Nền tảng</th>
@@ -48,6 +54,7 @@
                 <th>Nén lại</th>
                 <th>Thư mục</th>
                 <th>Copy</th>
+                <th>Xóa</th>
               </tr>
             </thead>
             <tbody id="videos"></tbody>
@@ -55,6 +62,6 @@
         </div>
       </section>
     </main>
-    <script src="/static/videos.js"></script>
+    <script src="/static/videos.js?v=20260426-bulk"></script>
   </body>
 </html>

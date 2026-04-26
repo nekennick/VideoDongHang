@@ -75,8 +75,9 @@ function renderQrDetections(detections) {
   layer.style.height = `${rect.height}px`;
   layer.innerHTML = (detections || [])
     .map((box) => {
+      const label = escapeHtml(box.label || "QR");
       return `<div class="qr-detection-box" style="left:${box.x * 100}%;top:${box.y * 100}%;width:${box.w * 100}%;height:${box.h * 100}%;">
-        <span>QR</span>
+        <span>${label}</span>
       </div>`;
     })
     .join("");
@@ -101,6 +102,9 @@ async function refreshStatus() {
   if (!status.ffmpeg_available) warnings.push(`FFmpeg chưa sẵn sàng: ${status.ffmpeg_path}`);
   if (status.disk_space_low) {
     warnings.push(`Ổ đĩa sắp đầy: còn ${status.disk_free_gb} GB, ngưỡng tối thiểu ${status.min_free_disk_gb} GB`);
+  }
+  if (status.last_ignored_reason === "duplicate_order" && status.last_ignored_order_code) {
+    warnings.push(`Mã ${status.last_ignored_order_code} đã có video, hệ thống bỏ qua`);
   }
   $("warning").textContent = warnings.join(" | ");
   $("clearRecentList").hidden = status.state !== "SHIFT_ENDED";

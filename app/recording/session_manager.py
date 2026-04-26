@@ -38,6 +38,10 @@ class SessionManager:
         self.camera_error: str | None = None
         self.disk_warning_active = False
         self.qr_detections: list[dict] = []
+        self.last_ignored_order_code: str | None = None
+        self.last_ignored_reason: str | None = None
+        self._last_duplicate_log_at: dict[str, float] = {}
+        self._finalizer_threads: list[threading.Thread] = []
 
     def write_frame(self, frame) -> None:
         with self.lock:
@@ -75,9 +79,29 @@ class SessionManager:
             self.repo.set_state("current_state", self.state)
             self.repo.log_event("camera_error", message, {"error": detail})
 
+    def clear_ignored_order(self, order_code: str) -> None:
+        with self.lock:
+            if self.last_ignored_order_code == order_code:
+                self.last_ignored_order_code = None
+                self.last_ignored_reason = None
+            self._last_duplicate_log_at.pop(order_code, None)
+
     def handle_order_qr(self, order_code: str, platform: str, raw_content: str) -> None:
         with self.lock:
             if self.state == "RECORDING" and order_code == self.current_order_code:
+                return
+            if self.repo.order_code_exists(order_code):
+                self.last_ignored_order_code = order_code
+                self.last_ignored_reason = "duplicate_order"
+                now = time.monotonic()
+                last_log_at = self._last_duplicate_log_at.get(order_code, 0.0)
+                if now - last_log_at >= 2.0:
+                    self._last_duplicate_log_at[order_code] = now
+                    self.repo.log_event(
+                        "duplicate_order_ignored",
+                        "Duplicate order QR ignored",
+                        {"order_code": order_code, "current_order_code": self.current_order_code},
+                    )
                 return
             now = time.monotonic()
             cooldown = float(self.config["qr"].get("switch_order_cooldown_seconds", 0.3))
@@ -122,6 +146,21 @@ class SessionManager:
             self.repo.set_state("current_state", self.state)
             self.repo.log_event("end_shift_detected", "Emergency stop from admin API", {})
 
+    def wait_for_finalizers(self, timeout: float | None = None) -> None:
+        deadline = None if timeout is None else time.monotonic() + timeout
+        while True:
+            with self.lock:
+                threads = list(self._finalizer_threads)
+            if not threads:
+                return
+            for thread in threads:
+                remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
+                thread.join(timeout=remaining)
+            with self.lock:
+                self._finalizer_threads = [thread for thread in self._finalizer_threads if thread.is_alive()]
+            if deadline is not None and time.monotonic() >= deadline:
+                return
+
     def _start_new_session(self) -> None:
         if self.state == "SHIFT_ENDED" or not self.session_id:
             self.session_id = uuid.uuid4().hex
@@ -153,6 +192,8 @@ class SessionManager:
         self.current_platform = platform
         self.current_raw_path = str(raw_path)
         self.current_start_monotonic = time.monotonic()
+        self.last_ignored_order_code = None
+        self.last_ignored_reason = None
         self.state = "RECORDING"
         self._last_switch_at = time.monotonic()
         self.repo.set_state("current_state", self.state)
@@ -162,23 +203,46 @@ class SessionManager:
     def _stop_current_recording(self) -> None:
         if not self.writer or self.current_video_id is None or self.current_raw_path is None:
             return
-        try:
-            self.writer.close()
-        finally:
-            self.writer = None
+        writer = self.writer
+        video_id = self.current_video_id
+        raw_path = self.current_raw_path
+        start_monotonic = self.current_start_monotonic
         duration = 0.0
-        if self.current_start_monotonic is not None:
-            duration = max(0.0, time.monotonic() - self.current_start_monotonic)
-        raw_size_mb = self.repo.file_size_mb(self.current_raw_path)
-        self.repo.finish_recording(self.current_video_id, duration, raw_size_mb)
-        output_name = Path(self.current_raw_path).name.replace("_raw", "")
-        output_path = dated_dir(self.config["storage"]["videos_dir"]) / output_name
-        self.compression_queue.put(CompressionJob(self.current_video_id, self.current_raw_path, str(output_path)))
-        self.repo.log_event("order_stopped", "Order recording stopped and queued", {"video_id": self.current_video_id})
+        if start_monotonic is not None:
+            duration = max(0.0, time.monotonic() - start_monotonic)
+
+        self.writer = None
         self.current_video_id = None
         self.current_order_code = None
         self.current_raw_path = None
         self.current_start_monotonic = None
+
+        thread = threading.Thread(
+            target=self._finalize_recording,
+            args=(writer, video_id, raw_path, duration),
+            name=f"recording-finalizer-{video_id}",
+            daemon=True,
+        )
+        self._finalizer_threads.append(thread)
+        thread.start()
+
+    def _finalize_recording(self, writer: VideoWriter, video_id: int, raw_path: str, duration: float) -> None:
+        try:
+            writer.close()
+            raw_size_mb = self.repo.file_size_mb(raw_path)
+            self.repo.finish_recording(video_id, duration, raw_size_mb)
+            output_name = Path(raw_path).name.replace("_raw", "")
+            output_path = dated_dir(self.config["storage"]["videos_dir"]) / output_name
+            self.compression_queue.put(CompressionJob(video_id, raw_path, str(output_path)))
+            self.repo.log_event("order_stopped", "Order recording stopped and queued", {"video_id": video_id})
+        except Exception as exc:
+            logger.exception("Failed finalizing recording")
+            self.repo.mark_failed(video_id, f"Failed finalizing recording: {exc}")
+            self.repo.log_event("recording_finalize_failed", "Failed finalizing recording", {"video_id": video_id, "error": str(exc)})
+        finally:
+            with self.lock:
+                current = threading.current_thread()
+                self._finalizer_threads = [thread for thread in self._finalizer_threads if thread is not current and thread.is_alive()]
 
     def update_disk_status(self, disk_free_gb: float, min_free_disk_gb: float) -> None:
         with self.lock:
@@ -211,5 +275,7 @@ class SessionManager:
                 "camera_connected": self.camera_connected,
                 "camera_error": self.camera_error,
                 "last_qr_content": self.last_qr_content,
+                "last_ignored_order_code": self.last_ignored_order_code,
+                "last_ignored_reason": self.last_ignored_reason,
                 "qr_detections": list(self.qr_detections),
             }

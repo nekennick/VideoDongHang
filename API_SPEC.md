@@ -74,6 +74,38 @@ Stream file video nén để xem trên trình duyệt.
 
 Chỉ stream khi video đã nén xong và status = done.
 
+## 5.1. `DELETE /api/videos/{id}`
+
+Xóa video khỏi danh sách quản trị.
+
+Behavior:
+
+```text
+Nếu video đang recording/queued/compressing:
+    không cho xóa để tránh mất file đang ghi hoặc đang nén
+
+Nếu video done/failed:
+    xóa file video_path nếu còn tồn tại
+    xóa file raw_path nếu còn tồn tại
+    xóa record khỏi database
+```
+
+Sau khi record bị xóa, mã đơn đó không còn bị tính là trùng nữa.
+
+## 5.2. `POST /api/videos/bulk-delete`
+
+Xóa nhiều video khỏi danh sách quản trị.
+
+Request:
+
+```json
+{
+  "ids": [1, 2, 3]
+}
+```
+
+Mỗi video được xử lý giống `DELETE /api/videos/{id}`. Video đang recording/queued/compressing sẽ bị bỏ qua và trả trong danh sách lỗi.
+
 ## 6. `GET /api/preview.mjpg`
 
 MJPEG stream preview camera.

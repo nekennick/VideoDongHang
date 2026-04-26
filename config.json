@@ -1,17 +1,18 @@
 {
   "camera": {
-    "index": 0,
+    "index": 1,
     "width": 1280,
     "height": 720,
-    "fps": 20,
+    "fps": 30,
     "backend": "auto"
   },
   "qr": {
     "end_shift_command": "CMD:END_SHIFT",
     "end_shift_debounce_seconds": 1.0,
     "order_qr_process_immediately": true,
-    "switch_order_cooldown_seconds": 0.3,
-    "roi_enabled": false,
+    "switch_order_cooldown_seconds": 0.05,
+    "detect_max_width": 960,
+    "roi_enabled": true,
     "roi": {
       "x": 0.05,
       "y": 0.05,

@@ -17,13 +17,62 @@ from app.utils.paths import disk_free_gb
 
 
 def _open_folder(path: Path) -> None:
+    path = path.resolve()
     path.mkdir(parents=True, exist_ok=True)
     try:
-        os.startfile(path)  # type: ignore[attr-defined]
+        os.startfile(str(path))  # type: ignore[attr-defined]
     except AttributeError as exc:
         raise HTTPException(status_code=501, detail="Open folder is only supported on Windows") from exc
     except OSError as exc:
         raise HTTPException(status_code=500, detail=f"Could not open folder: {exc}") from exc
+
+
+def _is_relative_to(path: Path, base: Path) -> bool:
+    try:
+        path.relative_to(base)
+    except ValueError:
+        return False
+    return True
+
+
+def _delete_stored_file(path_value: str | None) -> bool:
+    if not path_value:
+        return False
+    path = Path(path_value).resolve()
+    storage_dirs = [
+        Path(CONFIG["storage"]["raw_dir"]).resolve(),
+        Path(CONFIG["storage"]["videos_dir"]).resolve(),
+    ]
+    if not any(_is_relative_to(path, storage_dir) for storage_dir in storage_dirs):
+        raise HTTPException(status_code=400, detail=f"Refusing to delete file outside storage: {path_value}")
+    if not path.exists():
+        return False
+    if not path.is_file():
+        raise HTTPException(status_code=400, detail=f"Refusing to delete non-file path: {path_value}")
+    path.unlink()
+    return True
+
+
+def _delete_video_item(repo: Repository, session_manager: SessionManager, video_id: int) -> dict:
+    item = repo.get_video(video_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    if item["status"] in {"recording", "queued", "compressing"}:
+        raise HTTPException(status_code=409, detail="Cannot delete a video that is recording or being compressed")
+
+    deleted_files = []
+    for key in ("video_path", "raw_path"):
+        if _delete_stored_file(item.get(key)):
+            deleted_files.append(key)
+
+    repo.delete_video(video_id)
+    session_manager.clear_ignored_order(item["order_code"])
+    repo.log_event(
+        "video_deleted",
+        "Video record and files deleted",
+        {"video_id": video_id, "order_code": item["order_code"], "deleted_files": deleted_files},
+    )
+    return {"id": video_id, "order_code": item["order_code"], "deleted_files": deleted_files}
 
 
 def _apply_config_update(current: dict, payload: dict[str, Any]) -> tuple[dict, bool]:
@@ -31,7 +80,7 @@ def _apply_config_update(current: dict, payload: dict[str, Any]) -> tuple[dict, 
         "camera": {"index", "width", "height", "fps", "backend"},
         "ffmpeg": {"path", "crf", "preset"},
         "storage": {"base_dir", "raw_dir", "videos_dir", "database_dir", "logs_dir", "min_free_disk_gb"},
-        "qr": {"end_shift_debounce_seconds", "switch_order_cooldown_seconds", "roi_enabled", "roi"},
+        "qr": {"end_shift_debounce_seconds", "switch_order_cooldown_seconds", "detect_max_width", "roi_enabled", "roi"},
     }
     next_config = deepcopy(current)
     restart_required = False
@@ -71,6 +120,10 @@ def _apply_config_update(current: dict, payload: dict[str, Any]) -> tuple[dict, 
                 value = float(value)
                 if value < 0:
                     raise HTTPException(status_code=400, detail=f"qr.{key} must be >= 0")
+            if section == "qr" and key == "detect_max_width":
+                value = int(value)
+                if value < 0:
+                    raise HTTPException(status_code=400, detail="qr.detect_max_width must be >= 0")
             next_config[section][key] = value
             if section in {"camera", "storage"}:
                 restart_required = True
@@ -120,6 +173,30 @@ def build_api_router(repo: Repository, session_manager: SessionManager, camera_s
         if item is None:
             raise HTTPException(status_code=404, detail="Video not found")
         return item
+
+    @router.delete("/api/videos/{video_id}")
+    def delete_video(video_id: int):
+        return {"ok": True, **_delete_video_item(repo, session_manager, video_id)}
+
+    @router.post("/api/videos/bulk-delete")
+    def bulk_delete_videos(payload: dict[str, Any] = Body(...)):
+        video_ids = payload.get("ids")
+        if not isinstance(video_ids, list) or not video_ids:
+            raise HTTPException(status_code=400, detail="ids must be a non-empty list")
+        if len(video_ids) > 200:
+            raise HTTPException(status_code=400, detail="Cannot delete more than 200 videos at once")
+
+        deleted = []
+        failed = []
+        for raw_id in video_ids:
+            try:
+                video_id = int(raw_id)
+                deleted.append(_delete_video_item(repo, session_manager, video_id))
+            except HTTPException as exc:
+                failed.append({"id": raw_id, "error": exc.detail})
+            except Exception as exc:
+                failed.append({"id": raw_id, "error": str(exc)})
+        return {"ok": not failed, "deleted": deleted, "failed": failed}
 
     @router.get("/video/{video_id}")
     def stream_video(video_id: int):

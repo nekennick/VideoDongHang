@@ -101,6 +101,19 @@ class Repository:
             row = self.conn.execute("SELECT * FROM order_videos WHERE id = ?", (video_id,)).fetchone()
             return _row_to_dict(row)
 
+    def delete_video(self, video_id: int) -> None:
+        with self.lock:
+            self.conn.execute("DELETE FROM order_videos WHERE id = ?", (video_id,))
+            self.conn.commit()
+
+    def order_code_exists(self, order_code: str) -> bool:
+        with self.lock:
+            row = self.conn.execute(
+                "SELECT 1 FROM order_videos WHERE order_code = ? LIMIT 1",
+                (order_code,),
+            ).fetchone()
+            return row is not None
+
     def list_videos(
         self,
         *,

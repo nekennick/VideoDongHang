@@ -21,7 +21,8 @@ config.json
     "end_shift_command": "CMD:END_SHIFT",
     "end_shift_debounce_seconds": 1.0,
     "order_qr_process_immediately": true,
-    "switch_order_cooldown_seconds": 0.3,
+    "switch_order_cooldown_seconds": 0.05,
+    "detect_max_width": 960,
     "roi_enabled": true,
     "roi": {
       "x": 0.05,
